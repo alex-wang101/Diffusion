@@ -64,8 +64,16 @@ class languageModel(nn.Module):
         super().__init__()
         self.token_embedding_table = nn.Embedding(config.vocab_size, config.n_embd)
         self.lm_head = nn.Linear(config.n_embd, config.vocab_size)
+        print(self.lm_head)
 
     def forward(self, inputs, targets):
+        """ Forward pass of the model.
+        Args:
+            inputs (torch.Tensor): Input token indices.
+            targets (torch.Tensor): Target token indices for loss computation.
+        Returns:
+            logits (torch.Tensor): Logits for the next token prediction.
+            loss (torch.Tensor): Computed loss value."""
         embeded_tokens = self.token_embedding_table(inputs)
         logits = self.lm_head(embeded_tokens)
 
@@ -77,9 +85,28 @@ class languageModel(nn.Module):
 
         # Flatten the logits to the proper shape for the loss function
         logits = logits.view(b*t, -1)
+        print("Logits reshaped:", logits.shape)
+        print(logits)
         targets = targets.view(b*t)
         loss = F.cross_entropy(logits, targets)
         return logits, loss
+    
+    def generate(self, idx, max_new_tokens=1000):
+        """
+        Generate new tokens based on the input index.
+        Args:
+            idx (torch.Tensor): Input indices to start generation.
+            max_new_tokens (int): Maximum number of new tokens to generate.
+        Returns:
+            torch.Tensor: Generated token indices.
+        """
+        for _ in range(max_new_tokens):
+            logits, _ = self(idx, None)  
+            idx_next = F.softmax(logits, dim=-1)
+            idx = torch.cat([idx, idx_next], dim=1)
+
+            
+       
 # reads the input text file, initializes the Data class, and retrieves a batch of training data.
 def train_test_model():
     with open("input.txt", "r", encoding="utf-8") as f:
@@ -87,12 +114,21 @@ def train_test_model():
     config = Config()
     data = Data(text, config)
     xbatch, ybatch = data.get_batch("train", config)
+
     # Model instantiation
     model = languageModel(config).to(device)
     model(xbatch, ybatch)
     logits, loss = model(xbatch, ybatch)
-    print("Logits shape:", logits.shape)
-    print("loss:", loss.item())
+    # print("Logits:", logits)
+    # print("loss:", loss)
+
+    # Generate an output tensor
+    in_tensor = torch.zeros((1, 1), dtype=torch.long)
+    out_tensor = model.generate(in_tensor, max_new_tokens=1000)
+    print(out_tensor)
+    # print("".join(data.decode(out_tensor[0].tolist())))
+
+    
 def main():
     train_test_model()
 
