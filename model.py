@@ -1,14 +1,18 @@
 import torch 
 import torch.nn as nn
+import torch.nn.functional as F
 from dataclasses import dataclass
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
+seed = 42
+torch.manual_seed(seed)
 @dataclass
 class Config: 
     cw_size : int = 8
     batch_size : int = 4
     train_split : float = 0.9
+    n_embd : int = 32
+
 class Data:
     """
     Data class to handle text data, encoding and decoding characters.
@@ -50,23 +54,45 @@ class Data:
         index = torch.randint(len(data) - config.cw_size, (config.batch_size,))
         x = torch.stack([data[i:i+config.cw_size] for i in index]).to(device)
         y = torch.stack([data[i+1:i+1+config.cw_size] for i in index]).to(device)
-        print(x, y)
+        return x, y
 
     def estimate_loss(self, model, config):
         pass
 
-    def forward(self, x):
-        x = self.embedding(x)
-        x = x.mean(dim=1)  # Average over the context window
-        x = self.linear(x)
-        return x
+class languageModel(nn.Module):
+    def __init__(self, config):
+        super().__init__()
+        self.token_embedding_table = nn.Embedding(config.vocab_size, config.n_embd)
+        self.lm_head = nn.Linear(config.n_embd, config.vocab_size)
+
+    def forward(self, inputs, targets):
+        embeded_tokens = self.token_embedding_table(inputs)
+        logits = self.lm_head(embeded_tokens)
+
+        # b = batch size
+        # t = context window size
+        # c = embedding dimension
+
+        b, t, c = logits.shape
+
+        # Flatten the logits to the proper shape for the loss function
+        logits = logits.view(b*t, -1)
+        targets = targets.view(b*t)
+        loss = F.cross_entropy(logits, targets)
+        return logits, loss
 # reads the input text file, initializes the Data class, and retrieves a batch of training data.
 def train_test_model():
     with open("input.txt", "r", encoding="utf-8") as f:
         text = f.read()
     config = Config()
     data = Data(text, config)
-    data.get_batch("train", config)
+    xbatch, ybatch = data.get_batch("train", config)
+    # Model instantiation
+    model = languageModel(config).to(device)
+    model(xbatch, ybatch)
+    logits, loss = model(xbatch, ybatch)
+    print("Logits shape:", logits.shape)
+    print("loss:", loss.item())
 def main():
     train_test_model()
 
