@@ -66,7 +66,7 @@ class languageModel(nn.Module):
         self.lm_head = nn.Linear(config.n_embd, config.vocab_size)
         print(self.lm_head)
 
-    def forward(self, inputs, targets):
+    def forward(self, inputs, targets=None):
         """ Forward pass of the model.
         Args:
             inputs (torch.Tensor): Input token indices.
@@ -80,15 +80,18 @@ class languageModel(nn.Module):
         # b = batch size
         # t = context window size
         # c = embedding dimension
-
         b, t, c = logits.shape
 
-        # Flatten the logits to the proper shape for the loss function
-        logits = logits.view(b*t, -1)
-        print("Logits reshaped:", logits.shape)
-        print(logits)
-        targets = targets.view(b*t)
-        loss = F.cross_entropy(logits, targets)
+        if targets is not None: 
+            # Flatten the logits to the proper shape for the loss function
+            logits = logits.view(b*t, -1)
+            print("Logits reshaped:", logits.shape)
+            print(logits)
+            targets = targets.view(b*t)
+            loss = F.cross_entropy(logits, targets)
+            return logits, loss
+        else:
+            loss = None
         return logits, loss
     
     def generate(self, idx, max_new_tokens=1000):
@@ -101,8 +104,11 @@ class languageModel(nn.Module):
             torch.Tensor: Generated token indices.
         """
         for _ in range(max_new_tokens):
-            logits, _ = self(idx, None)  
-            idx_next = F.softmax(logits, dim=-1)
+            idx_context = idx[:, -Config.cw_size:]  # Use the last 8 tokens as context
+            logits, _ = self(idx_context, None) 
+            logits = logits[:, -1, :]  # Get the logits for the last token
+            probs = F.softmax(logits, dim=-1)
+            idx_next = torch.multinomial(probs, num_samples=1)  # Sample from the probability distribution
             idx = torch.cat([idx, idx_next], dim=1)
 
             
@@ -117,7 +123,6 @@ def train_test_model():
 
     # Model instantiation
     model = languageModel(config).to(device)
-    model(xbatch, ybatch)
     logits, loss = model(xbatch, ybatch)
     # print("Logits:", logits)
     # print("loss:", loss)
