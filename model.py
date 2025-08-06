@@ -12,7 +12,9 @@ class Config:
     batch_size : int = 4
     train_split : float = 0.9
     n_embd : int = 32
-
+    train_iter : int = 2000
+    eval_iter : int = 200
+    
 class Data:
     """
     Data class to handle text data, encoding and decoding characters.
@@ -110,6 +112,7 @@ class languageModel(nn.Module):
             probs = F.softmax(logits, dim=-1)
             idx_next = torch.multinomial(probs, num_samples=1)  # Sample from the probability distribution
             idx = torch.cat([idx, idx_next], dim=1)
+        return idx
 
             
        
@@ -122,16 +125,23 @@ def train_test_model():
     xbatch, ybatch = data.get_batch("train", config)
 
     # Model instantiation
+
+    # Training loop 
     model = languageModel(config).to(device)
-    logits, loss = model(xbatch, ybatch)
-    # print("Logits:", logits)
-    # print("loss:", loss)
+    for i in range(config.train_iter):
+        xbatch, ybatch = data.get_batch("train", config)
+        logits, loss = model(xbatch, ybatch)
+        print(f'loss: {loss.item()}')
+        # print("Logits:", logits)
+        # print("loss:", loss)
+
+
 
     # Generate an output tensor
     in_tensor = torch.zeros((1, 1), dtype=torch.long)
     out_tensor = model.generate(in_tensor, max_new_tokens=1000)
-    print(out_tensor)
-    # print("".join(data.decode(out_tensor[0].tolist())))
+    # print(out_tensor)
+    print("".join(data.decode(out_tensor[0].tolist())))
 
     
 def main():
