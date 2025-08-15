@@ -14,6 +14,8 @@ class Config:
     n_embd : int = 32
     train_iter : int = 2000
     eval_iter : int = 200
+    lr : float = 1e-3
+    head_size = 4
     
 class Data:
     """
@@ -37,7 +39,6 @@ class Data:
         self.stded = {i : ch for i, ch in enumerate(vocab)}
 
         data = torch.tensor(self.encode(text), dtype=torch.long)
-        print(data)
         n = int(config.train_split * len(data))
         self.train_data = data[:n]
         self.test_data = data[n:]
@@ -87,8 +88,6 @@ class languageModel(nn.Module):
         if targets is not None: 
             # Flatten the logits to the proper shape for the loss function
             logits = logits.view(b*t, -1)
-            print("Logits reshaped:", logits.shape)
-            print(logits)
             targets = targets.view(b*t)
             loss = F.cross_entropy(logits, targets)
             return logits, loss
@@ -128,20 +127,24 @@ def train_test_model():
 
     # Training loop 
     model = languageModel(config).to(device)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=config.lr)
+    count = 0
     for i in range(config.train_iter):
+        optimizer.zero_grad()
         xbatch, ybatch = data.get_batch("train", config)
         logits, loss = model(xbatch, ybatch)
-        print(f'loss: {loss.item()}')
+        loss.backward()
+        optimizer.step()
+        if i % 100 == 0:    
+            print(f'loss: {loss.item()} {count}')
+            count += 1
         # print("Logits:", logits)
         # print("loss:", loss)
-
-
 
     # Generate an output tensor
     in_tensor = torch.zeros((1, 1), dtype=torch.long)
     out_tensor = model.generate(in_tensor, max_new_tokens=1000)
     # print(out_tensor)
-    print("".join(data.decode(out_tensor[0].tolist())))
 
     
 def main():
