@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from dataclasses import dataclass
+import transformer as t
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 seed = 42
@@ -11,11 +12,12 @@ class Config:
     cw_size : int = 8
     batch_size : int = 4
     train_split : float = 0.9
-    n_embd : int = 32
+    n_embed : int = 32
     train_iter : int = 2000
     eval_iter : int = 200
     lr : float = 1e-3
-    head_size = 4
+    n_heads : int = 4
+    p_dropout = 0.2
     
 class Data:
     """
@@ -65,8 +67,8 @@ class Data:
 class languageModel(nn.Module):
     def __init__(self, config):
         super().__init__()
-        self.token_embedding_table = nn.Embedding(config.vocab_size, config.n_embd)
-        self.lm_head = nn.Linear(config.n_embd, config.vocab_size)
+        self.token_embedding_table = nn.Embedding(config.vocab_size, config.n_embed)
+        self.lm_head = nn.Linear(config.n_embed, config.vocab_size)
         print(self.lm_head)
 
     def forward(self, inputs, targets=None):
@@ -146,9 +148,13 @@ def train_test_model():
     out_tensor = model.generate(in_tensor, max_new_tokens=1000)
     # print(out_tensor)
 
-    
-def main():
-    train_test_model()
+def test_modules(config: Config):
+    module = t.MultiHeadedAttention(config)
+    print("MultiHeadedAttention: ", module)
+
+def main(): 
+    # train_test_model()
+    test_modules(Config())
 
 if __name__ == "__main__":
     main()

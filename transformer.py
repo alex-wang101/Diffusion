@@ -25,8 +25,8 @@ class AttentionHead(nn.Module):
         v = self.value[x] # What information do i want to communicate during aggregation of token values
         
         att = q @ k.transpose(1, 2) * (d ** -0.5)
-        att = att.masked_filled(self.tril == 0, float('-inf'))
-        F.softmax(att, dim=-1)
+        att = att.masked_fill(self.tril[:t, :t] == 0, float('-inf'))
+        att = F.softmax(att, dim=-1)
         att = self.dropout(att)
         out = att @ v 
         return out
@@ -34,7 +34,11 @@ class AttentionHead(nn.Module):
 class MultiHeadedAttention(nn.Module):
     def __init__(self, config):
         super().__init__()
-    
+        head_size = config.n_embed // config.n_heads 
+        self.attention_heads = nn.ModuleList(
+            [AttentionHead(config, head_size) for _ in range(config.n_heads)]
+        )
     def forward(self, x):
+        x = torch.cat([head(x) for head in self.attention_heads], dim=-1)
 
 
