@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from dataclasses import dataclass
-import transformer as t
+import transformer as tf
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 seed = 42
@@ -17,7 +17,7 @@ class Config:
     eval_iter : int = 200
     lr : float = 1e-3
     n_heads : int = 4
-    p_dropout = 0.2
+    p_dropout : float = 0.2
     
 class Data:
     """
@@ -149,12 +149,25 @@ def train_test_model():
     # print(out_tensor)
 
 def test_modules(config: Config):
-    module = t.MultiHeadedAttention(config)
-    print("MultiHeadedAttention: ", module)
+    b, t, d = 4, 8, 32
+    head_size = d // config.n_heads
+    module = tf.AttentionHead(config, head_size)
+    in_tensor = torch.zeros((b, t, 32))
+    out = module(in_tensor)
+    out_shape = (4, 8, 8)
+    assert out.shape == out_shape, f"failed with shape {out_shape}"
 
-def main(): 
+    head_size = d // config.n_heads
+    module = tf.MultiHeadedAttention(config)
+    in_tensor = torch.zeros((b, t, d))
+    out = module(in_tensor)
+    out_shape = (4, 8, 32)
+    assert out.shape == out_shape, f"failed with shape {out_shape}"
+
+def main():
+    config = Config()
     # train_test_model()
-    test_modules(Config())
+    test_modules(config)
 
 if __name__ == "__main__":
     main()
