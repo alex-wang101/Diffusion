@@ -13,8 +13,8 @@ class Config:
     batch_size : int = 4
     train_split : float = 0.9
     n_embed : int = 32
-    train_iter : int = 2000
-    eval_iter : int = 200
+    train_iter : int = 5000
+    eval_iters : int = 500
     lr : float = 1e-3
     n_heads : int = 4
     p_dropout : float = 0.2
@@ -61,13 +61,28 @@ class Data:
         y = torch.stack([data[i+1:i+1+config.cw_size] for i in index]).to(device)
         return x, y
 
+    @torch.no_grad()
     def estimate_loss(self, model, config):
-        pass
+        # Everything 200 iterations we'll evaluate the loss on the test set
+        out = {}
+        model.eval()
+        for split in ['train', 'test']:
+            losses = torch.zeros(config.eval_iters)
+            for i in range(config.eval_iters):
+                x, y = self.get_batch(split, config)
+                logits, loss = model(x, y)
+                losses[i] = loss.item()
+            out[split] = losses.mean()
+        model.train()
+        return out
+
 
 class languageModel(nn.Module):
     def __init__(self, config):
         super().__init__()
         self.token_embedding_table = nn.Embedding(config.vocab_size, config.n_embed)
+        self.pos_embedding_table = nn.Embedding(config.cw_size, config.n_embed)
+        self.mha = tf.MultiHeadedAttention(config)
         self.lm_head = nn.Linear(config.n_embed, config.vocab_size)
         print(self.lm_head)
 
@@ -79,13 +94,19 @@ class languageModel(nn.Module):
         Returns:
             logits (torch.Tensor): Logits for the next token prediction.
             loss (torch.Tensor): Computed loss value."""
-        embeded_tokens = self.token_embedding_table(inputs)
-        logits = self.lm_head(embeded_tokens)
-
         # b = batch size
         # t = context window size
-        # c = embedding dimension
-        b, t, c = logits.shape
+        # c  = embedding dimension
+        # logits = (b, t, c)
+        b, t = inputs.shape
+        embeded_tokens = self.token_embedding_table(inputs)
+        position_embeddings = self.pos_embedding_table(torch.arange(t))
+        x = embeded_tokens + position_embeddings
+        x = self.mha(x)
+        logits = self.lm_head(embeded_tokens)
+
+        
+        
 
         if targets is not None: 
             # Flatten the logits to the proper shape for the loss function
@@ -118,10 +139,9 @@ class languageModel(nn.Module):
             
        
 # reads the input text file, initializes the Data class, and retrieves a batch of training data.
-def train_test_model():
+def train_test_model(config : Config):
     with open("input.txt", "r", encoding="utf-8") as f:
         text = f.read()
-    config = Config()
     data = Data(text, config)
     xbatch, ybatch = data.get_batch("train", config)
 
@@ -130,16 +150,16 @@ def train_test_model():
     # Training loop 
     model = languageModel(config).to(device)
     optimizer = torch.optim.AdamW(model.parameters(), lr=config.lr)
-    count = 0
     for i in range(config.train_iter):
+        if i % config.eval_iters == 0:
+            out = data.estimate_loss(model, config)
+            print(f"loss: {out['train']} val_loss: {out['test']}")
+            print(f"iter: {i}")
         optimizer.zero_grad()
         xbatch, ybatch = data.get_batch("train", config)
         logits, loss = model(xbatch, ybatch)
         loss.backward()
         optimizer.step()
-        if i % 100 == 0:    
-            print(f'loss: {loss.item()} {count}')
-            count += 1
         # print("Logits:", logits)
         # print("loss:", loss)
 
@@ -166,8 +186,8 @@ def test_modules(config: Config):
 
 def main():
     config = Config()
-    # train_test_model()
-    test_modules(config)
+    train_test_model(config)
+    # test_modules(config)
 
 if __name__ == "__main__":
     main()
