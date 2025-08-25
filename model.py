@@ -18,6 +18,7 @@ class Config:
     lr : float = 1e-3
     n_heads : int = 4
     p_dropout : float = 0.2
+    n_blocks : int = 4
     
 class Data:
     """
@@ -82,7 +83,9 @@ class languageModel(nn.Module):
         super().__init__()
         self.token_embedding_table = nn.Embedding(config.vocab_size, config.n_embed)
         self.pos_embedding_table = nn.Embedding(config.cw_size, config.n_embed)
-        self.mha = tf.MultiHeadedAttention(config)
+        # self.mha = tf.MultiHeadedAttention(config)
+        #self.blocks = tf.Block(config)
+        self.blocks = nn.Sequential(*[tf.Block(config) for _ in range(config.n_blocks)])
         self.lm_head = nn.Linear(config.n_embed, config.vocab_size)
         print(self.lm_head)
 
@@ -102,11 +105,8 @@ class languageModel(nn.Module):
         embeded_tokens = self.token_embedding_table(inputs)
         position_embeddings = self.pos_embedding_table(torch.arange(t))
         x = embeded_tokens + position_embeddings
-        x = self.mha(x)
-        logits = self.lm_head(embeded_tokens)
-
-        
-        
+        x = self.blocks(x)
+        logits = self.lm_head(x)
 
         if targets is not None: 
             # Flatten the logits to the proper shape for the loss function
